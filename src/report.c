@@ -13,6 +13,7 @@
 #include <cairo-pdf.h>
 #include <cairo.h>
 #include <math.h>
+#include <pcap/pcap.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -48,7 +49,9 @@ typedef struct {
     int               page;
     int               fig_no, tab_no;
     int               outline_parent;
-    const analysis_t *a;
+    const analysis_t *a;          /* NULL w dokumentacji narzędzia        */
+    const config_t   *cfg;        /* progi detektorów (sekcja metod)      */
+    const char       *footer;     /* tekst stopki                         */
     char              header[300];
 } doc_t;
 
@@ -197,7 +200,7 @@ static void doc_footer(doc_t *d)
     use_font(cr, 7.5, 0);
     set_rgb(cr, COL_MUTED);
     cairo_move_to(cr, MARGIN_L, PAGE_H - 32);
-    cairo_show_text(cr, PA_NAME " " PA_VERSION " · raport wygenerowany automatycznie");
+    cairo_show_text(cr, d->footer);
     snprintf(buf, sizeof buf, "Strona %d", d->page);
     cairo_move_to(cr, PAGE_W - MARGIN_R - text_width(cr, buf), PAGE_H - 32);
     cairo_show_text(cr, buf);
@@ -824,20 +827,23 @@ static void sec_title(doc_t *d)
     cairo_show_text(cr, "Zawartość raportu");
     d->y += 16;
     static const char *const toc[] = {
-        "1. Podsumowanie", "2. Architektura narzędzia", "3. Metody analizy",
-        "4. Statystyki ruchu", "5. Charakterystyka komunikacji", "6. Analiza protokołu TCP",
-        "7. Analiza DNS", "8. Wykryte nieprawidłowości", "9. Opis prezentowanych danych",
-        "Załącznik A. Pliki wynikowe"
+        "1. Podsumowanie", "2. Statystyki ruchu", "3. Charakterystyka komunikacji",
+        "4. Analiza protokołu TCP", "5. Analiza DNS", "6. Wykryte nieprawidłowości",
+        "7. Opis prezentowanych danych", "Załącznik A. Pliki wynikowe"
     };
     use_font(cr, 8.5, 0);
     set_rgb(cr, COL_INK);
     for (size_t i = 0; i < ARRAY_LEN(toc); i++) {
-        double col_x = MARGIN_L + (i < 5 ? 0 : CONTENT_W / 2);
-        double row_y = d->y + (double)(i % 5) * 12.5 + 8;
+        double col_x = MARGIN_L + (i < 4 ? 0 : CONTENT_W / 2);
+        double row_y = d->y + (double)(i % 4) * 12.5 + 8;
         cairo_move_to(cr, col_x, row_y);
         cairo_show_text(cr, toc[i]);
     }
-    d->y += 5 * 12.5 + 10;
+    d->y += 4 * 12.5 + 14;
+    doc_text(d, "Architekturę narzędzia i zastosowane metody analizy opisano w osobnym "
+                "dokumencie " DOC_FILE_NAME ", zapisywanym jednorazowo w głównym katalogu "
+                "wynikowym (nadrzędnym względem katalogu tego raportu).",
+             8.2, 0, COL_INK2, 0, 11.2);
 }
 
 static void sec_summary(doc_t *d)
@@ -908,21 +914,23 @@ static void sec_summary(doc_t *d)
     if (!shown)
         doc_para(d, "Nie wykryto nieprawidłowości o poziomie ważności NISKI lub wyższym. "
                     "Ruch ma charakter typowy dla prawidłowo działającej sieci; ewentualne "
-                    "uwagi informacyjne przedstawiono w sekcji 8.");
+                    "uwagi informacyjne przedstawiono w sekcji 6.");
     else
         doc_para(d, "Szczegółowy opis każdej nieprawidłowości, wraz z interpretacją "
-                    "i przedziałem czasu, zawiera sekcja 8.");
+                    "i przedziałem czasu, zawiera sekcja 6.");
 }
 
 static void sec_architecture(doc_t *d)
 {
-    doc_heading(d, 1, "2. Architektura narzędzia");
+    doc_heading(d, 1, "1. Architektura narzędzia");
     doc_para(d,
         "Narzędzie " PA_NAME " zostało napisane w języku C (standard C11) dla systemu Linux. "
         "Jest programem wiersza poleceń, który dla każdego wskazanego pliku .pcap lub .pcapng "
-        "wykonuje jednoprzebiegową, strumieniową analizę pakietów, a następnie generuje ten "
+        "wykonuje jednoprzebiegową, strumieniową analizę pakietów, a następnie generuje "
         "raport PDF, zestaw wykresów PNG, plik CSV z listą przepływów oraz podsumowanie "
-        "tekstowe. Przetwarzanie ma charakter potokowy (rys. 1).");
+        "tekstowe. Niniejsza dokumentacja powstaje jednorazowo przy każdym uruchomieniu, "
+        "niezależnie od liczby analizowanych plików. Przetwarzanie ma charakter potokowy "
+        "(rys. 1).");
     doc_arch_diagram(d);
     doc_para(d,
         "Moduł odczytu pobiera kolejne pakiety z pliku funkcjami pcap_open_offline() "
@@ -936,7 +944,7 @@ static void sec_architecture(doc_t *d)
         "rozkład czasów uzgadniania), uruchomienie detektorów nieprawidłowości, budowa "
         "wykresów i złożenie raportu.");
 
-    doc_heading(d, 2, "Moduły programu");
+    doc_heading(d, 2, "1.1. Moduły programu");
     {
         static const char *const hdr[] = {"Moduł", "Pliki", "Odpowiedzialność"};
         static const double w[] = {0.20, 0.22, 0.58};
@@ -965,7 +973,8 @@ static void sec_architecture(doc_t *d)
         cell(&cb, "Silnik wykresów (liniowe, słupkowe, punktowe) rysujący na dowolnej "
                   "powierzchni cairo; definicje 12 wykresów raportu.");
         cell(&cb, "Raport"); cell(&cb, "report.c, report.h");
-        cell(&cb, "Układ strony PDF: akapity, tabele, zakładki, osadzanie wektorowych wykresów.");
+        cell(&cb, "Układ strony PDF: akapity, tabele, zakładki, osadzanie wektorowych wykresów; "
+                  "raporty analizy i niniejsza dokumentacja.");
         cell(&cb, "Narzędzia"); cell(&cb, "util.c, common.h");
         cell(&cb, "Alokacja pamięci, formatowanie liczb (konwencja polska), adresy IP, "
                   "nazwy usług.");
@@ -973,7 +982,7 @@ static void sec_architecture(doc_t *d)
         cells_free(&cb);
     }
 
-    doc_heading(d, 2, "Zależności");
+    doc_heading(d, 2, "1.2. Zależności");
     doc_bullet(d, "libpcap (pakiet libpcap-dev) – odczyt plików pcap/pcapng i obsługa typów "
                   "warstwy łącza.");
     doc_bullet(d, "cairo (pakiet libcairo2-dev) – rysowanie wykresów oraz zapis plików PNG "
@@ -984,7 +993,7 @@ static void sec_architecture(doc_t *d)
     doc_para(d, "Program nie wymaga interpreterów ani dodatkowych bibliotek; wszystkie "
                 "zależności są dostępne w standardowych repozytoriach Ubuntu.");
 
-    doc_heading(d, 2, "Struktury danych i złożoność");
+    doc_heading(d, 2, "1.3. Struktury danych i złożoność");
     doc_bullet(d, "Tablica przepływów: haszowanie FNV-1a kanonicznego klucza (adresy, porty, "
                   "protokół) z łańcuchowaniem i podwajaniem liczby kubełków – średni koszt "
                   "obsługi pakietu O(1).");
@@ -996,15 +1005,43 @@ static void sec_architecture(doc_t *d)
                   "wyznaczane w jednym przejściu – O(n log n) względem liczby przepływów.");
     doc_bullet(d, "Odporność: każdy odczyt nagłówka jest poprzedzony kontrolą długości "
                   "zapisanych danych; uszkodzone pakiety są klasyfikowane, a nie odrzucane.");
+
+    doc_heading(d, 2, "1.4. Uruchamianie i pliki wynikowe");
+    doc_para(d, "Program uruchamia się poleceniem " PA_NAME " [opcje] plik.pcap [plik2.pcap …]. "
+                "W katalogu wynikowym (opcja -o, domyślnie „wyniki”) powstaje:");
+    {
+        static const char *const hdr[] = {"Ścieżka", "Zawartość"};
+        static const double w[] = {0.40, 0.60};
+        tspec_t t = {2, hdr, w, "ll"};
+        cells_t cb = {0};
+        cell(&cb, DOC_FILE_NAME);
+        cell(&cb, "Niniejsza dokumentacja: architektura narzędzia i metody analizy wraz "
+                  "z progami detektorów użytymi w danym uruchomieniu (jeden plik na uruchomienie).");
+        cell(&cb, "<nazwa pliku>/raport.pdf");
+        cell(&cb, "Raport z wynikami analizy danego pliku pcap.");
+        cell(&cb, "<nazwa pliku>/*.png");
+        cell(&cb, "12 wykresów (1600×900) – te same, które osadzono w raporcie.");
+        cell(&cb, "<nazwa pliku>/przeplywy.csv");
+        cell(&cb, "Lista wszystkich przepływów z licznikami i wskaźnikami jakości TCP.");
+        cell(&cb, "<nazwa pliku>/podsumowanie.txt");
+        cell(&cb, "Podsumowanie tekstowe z listą nieprawidłowości.");
+        doc_table(d, &t, &cb, "Struktura katalogu wynikowego");
+        cells_free(&cb);
+    }
+    doc_para(d, "Najważniejsze opcje: -t N (długość list rankingowych), -T klucz=wartość "
+                "(zmiana progu detektora, np. -T scan_ports=100), -L (lista progów), "
+                "-n (bez plików PNG), -c (bez pliku CSV), -q (bez podsumowania na wyjściu). "
+                "Kod wyjścia 0 oznacza sukces, 1 – błąd przetwarzania co najmniej jednego "
+                "pliku, 2 – błędne argumenty.");
 }
 
 static void sec_methods(doc_t *d)
 {
-    const config_t *c = &d->a->cfg;
+    const config_t *c = d->cfg;
     char b[64];
 
-    doc_heading(d, 1, "3. Metody analizy");
-    doc_heading(d, 2, "3.1. Dekodowanie pakietów");
+    doc_heading(d, 1, "2. Metody analizy");
+    doc_heading(d, 2, "2.1. Dekodowanie pakietów");
     doc_para(d,
         "Dla każdej ramki rozpoznawany jest typ warstwy łącza zapisany w nagłówku pliku "
         "(Ethernet, Linux cooked capture SLL/SLL2, loopback BSD, surowe IP). W ramkach "
@@ -1017,7 +1054,7 @@ static void sec_methods(doc_t *d)
         "nagłówków IP, co eliminuje wpływ dopełnienia ramek Ethernet. Wolumen ruchu liczony "
         "jest jako suma oryginalnych długości ramek (pole len rekordu pcap).");
 
-    doc_heading(d, 2, "3.2. Rekonstrukcja przepływów");
+    doc_heading(d, 2, "2.2. Rekonstrukcja przepływów");
     snprintf(b, sizeof b, "%g", c->idle_timeout);
     doc_paraf(d,
         "Przepływ to dwukierunkowa wymiana pakietów identyfikowana piątką: protokół, adresy "
@@ -1031,7 +1068,7 @@ static void sec_methods(doc_t *d)
         "bezczynności lub po segmencie SYN następującym po zakończeniu (FIN/RST) "
         "poprzedniego połączenia.", b);
 
-    doc_heading(d, 2, "3.3. Analiza stanu i jakości połączeń TCP");
+    doc_heading(d, 2, "2.3. Analiza stanu i jakości połączeń TCP");
     doc_para(d,
         "Dla każdego połączenia śledzone są segmenty uzgadniania trójetapowego. Czas "
         "uzgadniania to odstęp między segmentem SYN a końcowym ACK klienta; przy "
@@ -1056,7 +1093,7 @@ static void sec_methods(doc_t *d)
         "powtarzający numer potwierdzenia i okno poprzedniego segmentu, gdy druga strona "
         "ma niepotwierdzone dane. Zerowe okno to segment ogłaszający rozmiar okna 0.");
 
-    doc_heading(d, 2, "3.4. Statystyki i szeregi czasowe");
+    doc_heading(d, 2, "2.4. Statystyki i szeregi czasowe");
     doc_para(d,
         "Statystyki globalne obejmują liczniki pakietów i bajtów według protokołów, rozkład "
         "długości ramek, liczniki flag TCP i niedozwolonych kombinacji flag. Szeregi czasowe "
@@ -1067,7 +1104,7 @@ static void sec_methods(doc_t *d)
         "co czyni je niezależnymi od szerokości przedziału. Rankingi hostów i usług "
         "tworzone są według wolumenu ruchu.");
 
-    doc_heading(d, 2, "3.5. Analiza DNS");
+    doc_heading(d, 2, "2.5. Analiza DNS");
     doc_para(d,
         "Datagramy UDP z portem 53 są dekodowane: nagłówek (typ komunikatu, kod odpowiedzi) "
         "oraz nazwa i typ pierwszego pytania. Liczone są zapytania, odpowiedzi, odpowiedzi "
@@ -1077,7 +1114,7 @@ static void sec_methods(doc_t *d)
         "Shannona co najmniej 3,8 bita na znak (charakterystyczne dla danych zakodowanych "
         "w base32/base64/hex).");
 
-    doc_heading(d, 2, "3.6. Wykrywanie nieprawidłowości");
+    doc_heading(d, 2, "2.6. Wykrywanie nieprawidłowości");
     doc_para(d,
         "Detektory działają po zakończeniu odczytu, na zbiorze przepływów, szeregach czasowych "
         "i statystykach DNS. Tabela przedstawia zastosowane kryteria i progi (wartości "
@@ -1106,7 +1143,7 @@ static void sec_methods(doc_t *d)
         cell(&cb, "Kombinacje NULL, XMAS, SYN+FIN, SYN+RST, FIN bez ACK.");
         cell(&cb, "każde wystąpienie");
         cell(&cb, "Tunelowanie DNS");
-        cell(&cb, "Heurystyka długości i entropii nazw (p. 3.5) w zapytaniach jednego hosta.");
+        cell(&cb, "Heurystyka długości i entropii nazw (p. 2.5) w zapytaniach jednego hosta.");
         cell(&cb, "≥ %d zapytań", c->dns_suspicious);
         cell(&cb, "NXDOMAIN");
         cell(&cb, "Udział odpowiedzi o nieistniejącej domenie (min. 20 odpowiedzi).");
@@ -1153,7 +1190,7 @@ static void sec_traffic(doc_t *d, const figure_set_t *fs, int png)
     const gstats_t *g = &a->g;
     char x1[64], x2[64], x3[64];
 
-    doc_heading(d, 1, "4. Statystyki ruchu");
+    doc_heading(d, 1, "2. Statystyki ruchu");
     doc_para(d, "Sekcja przedstawia ilościowy opis ruchu: wolumen, natężenie, udział "
                 "protokołów i rozkład rozmiarów pakietów.");
     cells_t cb = {0};
@@ -1244,7 +1281,7 @@ static void sec_communication(doc_t *d, const figure_set_t *fs, int png)
     char x1[64], x2[64], x3[64], x4[64];
     char title[128];
 
-    doc_heading(d, 1, "5. Charakterystyka komunikacji");
+    doc_heading(d, 1, "3. Charakterystyka komunikacji");
     doc_para(d, "Sekcja opisuje, kto i z kim się komunikuje: najaktywniejsze hosty, "
                 "wykorzystywane usługi, największe przepływy oraz ich stan i charakter.");
 
@@ -1327,7 +1364,7 @@ static void sec_tcp(doc_t *d, const figure_set_t *fs, int png)
     const analysis_t *a = d->a;
     char x1[64], x2[64], x3[64], x4[64];
 
-    doc_heading(d, 1, "6. Analiza protokołu TCP");
+    doc_heading(d, 1, "4. Analiza protokołu TCP");
     doc_para(d, "Sekcja przedstawia przebieg nawiązywania i zamykania połączeń TCP, "
                 "czasy uzgadniania oraz wskaźniki jakości transmisji.");
     cells_t cb = {0};
@@ -1375,7 +1412,7 @@ static void sec_tcp(doc_t *d, const figure_set_t *fs, int png)
 static void sec_dns(doc_t *d)
 {
     const dns_stats_t *s = &d->a->dns;
-    doc_heading(d, 1, "7. Analiza DNS");
+    doc_heading(d, 1, "5. Analiza DNS");
     if (s->queries + s->responses == 0) {
         doc_para(d, "W zapisie nie wystąpił ruch DNS przesyłany protokołem UDP na porcie 53.");
         return;
@@ -1408,7 +1445,7 @@ static void sec_anomalies(doc_t *d)
 {
     const analysis_t *a = d->a;
     cairo_t *cr = d->cr;
-    doc_heading(d, 1, "8. Wykryte nieprawidłowości");
+    doc_heading(d, 1, "6. Wykryte nieprawidłowości");
     {
         static const char *const hdr[] = {"Poziom", "Liczba", "Znaczenie"};
         static const double w[] = {0.16, 0.12, 0.72};
@@ -1467,7 +1504,7 @@ static void sec_anomalies(doc_t *d)
 
 static void sec_data_desc(doc_t *d)
 {
-    doc_heading(d, 1, "9. Opis prezentowanych danych");
+    doc_heading(d, 1, "7. Opis prezentowanych danych");
     doc_para(d, "Definicje miar i pojęć używanych w raporcie:");
     doc_bullet(d, "Pakiet / ramka – pojedynczy rekord pliku pcap. Wolumen to suma oryginalnych "
                   "długości ramek (z nagłówkiem warstwy łącza, bez sumy kontrolnej FCS); "
@@ -1492,7 +1529,7 @@ static void sec_data_desc(doc_t *d)
     doc_bullet(d, "Współczynnik zmienności (CV) – odchylenie standardowe odstępów między "
                   "połączeniami podzielone przez ich średnią; wartości bliskie zera oznaczają "
                   "komunikację ściśle okresową.");
-    doc_bullet(d, "Czasy w sekcji 8 podawane są w sekundach względem pierwszego pakietu "
+    doc_bullet(d, "Czasy w sekcji 6 podawane są w sekundach względem pierwszego pakietu "
                   "w pliku; znaczniki bezwzględne – w strefie UTC.");
 
     doc_heading(d, 2, "Ograniczenia analizy");
@@ -1528,40 +1565,129 @@ static void sec_files(doc_t *d, const figure_set_t *fs, int png)
         }
     doc_table(d, &t, &cb, "Pliki wynikowe");
     cells_free(&cb);
+    doc_para(d, "Opis architektury narzędzia i metod analizy znajduje się w pliku "
+                DOC_FILE_NAME " w głównym katalogu wynikowym.");
+}
+
+/* Strona tytułowa dokumentacji narzędzia. */
+static void sec_doc_title(doc_t *d)
+{
+    cairo_t *cr = d->cr;
+    char now[64], libs[200];
+
+    d->y = 120;
+    use_font(cr, 9, 1);
+    set_rgb(cr, COL_TCP);
+    cairo_move_to(cr, MARGIN_L, d->y);
+    cairo_show_text(cr, "DOKUMENTACJA NARZĘDZIA");
+    d->y += 34;
+    use_font(cr, 26, 1);
+    set_rgb(cr, COL_INK);
+    cairo_move_to(cr, MARGIN_L, d->y);
+    cairo_show_text(cr, PA_NAME);
+    d->y += 24;
+    use_font(cr, 12.5, 0);
+    set_rgb(cr, COL_INK2);
+    cairo_move_to(cr, MARGIN_L, d->y);
+    cairo_show_text(cr, "Architektura i metody analizy komunikacji TCP/UDP");
+    d->y += 34;
+
+    doc_para(d,
+        "Dokument opisuje budowę i sposób działania narzędzia: architekturę, moduły, "
+        "zależności, struktury danych oraz metody analizy i kryteria wykrywania "
+        "nieprawidłowości. Jest wspólny dla wszystkich raportów wygenerowanych w tym "
+        "uruchomieniu programu – raporty poszczególnych plików pcap zawierają wyłącznie "
+        "wyniki analizy i opis prezentowanych danych.");
+    d->y += 6;
+
+    cells_t cb = {0};
+    fmt_timestamp((double)time(NULL), now, sizeof now);
+    snprintf(libs, sizeof libs, "%s; cairo %s", pcap_lib_version(), cairo_version_string());
+    cell(&cb, "Narzędzie");          cell(&cb, PA_NAME " " PA_VERSION);
+    cell(&cb, "Data wygenerowania"); cell(&cb, "%s", now);
+    cell(&cb, "Biblioteki");         cell(&cb, "%s", libs);
+    cell(&cb, "Progi detektorów");
+    cell(&cb, "wartości użyte w tym uruchomieniu – tabela w punkcie 2.6");
+    static const double w[] = {0.28, 0.72};
+    tspec_t t = {2, NULL, w, "ll"};
+    doc_table(d, &t, &cb, NULL);
+    cells_free(&cb);
+
+    use_font(cr, 8.5, 1);
+    set_rgb(cr, COL_INK2);
+    cairo_move_to(cr, MARGIN_L, d->y + 8);
+    cairo_show_text(cr, "Zawartość dokumentu");
+    d->y += 16;
+    static const char *const toc[] = {
+        "1. Architektura narzędzia", "1.1. Moduły programu", "1.2. Zależności",
+        "1.3. Struktury danych i złożoność", "1.4. Uruchamianie i pliki wynikowe",
+        "2. Metody analizy", "2.1. Dekodowanie pakietów", "2.2. Rekonstrukcja przepływów",
+        "2.3. Analiza stanu i jakości połączeń TCP", "2.4. Statystyki i szeregi czasowe",
+        "2.5. Analiza DNS", "2.6. Wykrywanie nieprawidłowości"
+    };
+    use_font(cr, 8.5, 0);
+    set_rgb(cr, COL_INK);
+    for (size_t i = 0; i < ARRAY_LEN(toc); i++) {
+        double col_x = MARGIN_L + (i < 5 ? 0 : CONTENT_W / 2) + (strchr(toc[i] + 2, '.') ? 12 : 0);
+        double row_y = d->y + (double)(i < 5 ? i : i - 5) * 12.5 + 8;
+        cairo_move_to(cr, col_x, row_y);
+        cairo_show_text(cr, toc[i]);
+    }
+    d->y += 7 * 12.5 + 10;
 }
 
 /* ======================= API ======================= */
+
+static int doc_open(doc_t *d, const char *path, const char *title, const char *subject)
+{
+    d->surf = cairo_pdf_surface_create(path, PAGE_W, PAGE_H);
+    if (cairo_surface_status(d->surf) != CAIRO_STATUS_SUCCESS) {
+        cairo_surface_destroy(d->surf);
+        d->surf = NULL;
+        return -1;
+    }
+#ifdef HAVE_PDF_OUTLINE
+    cairo_pdf_surface_set_metadata(d->surf, CAIRO_PDF_METADATA_TITLE, title);
+    cairo_pdf_surface_set_metadata(d->surf, CAIRO_PDF_METADATA_CREATOR, PA_NAME " " PA_VERSION);
+    cairo_pdf_surface_set_metadata(d->surf, CAIRO_PDF_METADATA_SUBJECT, subject);
+#else
+    (void)title;
+    (void)subject;
+#endif
+    d->cr = cairo_create(d->surf);
+    doc_page_begin(d);
+    return 0;
+}
+
+static int doc_close(doc_t *d)
+{
+    doc_footer(d);
+    cairo_show_page(d->cr);
+    cairo_status_t st = cairo_status(d->cr);
+    cairo_destroy(d->cr);
+    cairo_surface_finish(d->surf);
+    if (st == CAIRO_STATUS_SUCCESS)
+        st = cairo_surface_status(d->surf);
+    cairo_surface_destroy(d->surf);
+    return st == CAIRO_STATUS_SUCCESS ? 0 : -1;
+}
 
 int report_write_pdf(const analysis_t *a, const figure_set_t *fs, const char *path,
                      int png_written)
 {
     doc_t d;
+    char title[400];
     memset(&d, 0, sizeof d);
     d.a = a;
-    d.surf = cairo_pdf_surface_create(path, PAGE_W, PAGE_H);
-    if (cairo_surface_status(d.surf) != CAIRO_STATUS_SUCCESS) {
-        cairo_surface_destroy(d.surf);
-        return -1;
-    }
-#ifdef HAVE_PDF_OUTLINE
-    {
-        char title[400];
-        snprintf(title, sizeof title, "Raport analizy ruchu TCP/UDP – %s", a->name);
-        cairo_pdf_surface_set_metadata(d.surf, CAIRO_PDF_METADATA_TITLE, title);
-        cairo_pdf_surface_set_metadata(d.surf, CAIRO_PDF_METADATA_CREATOR,
-                                       PA_NAME " " PA_VERSION);
-        cairo_pdf_surface_set_metadata(d.surf, CAIRO_PDF_METADATA_SUBJECT,
-                                       "Analiza komunikacji TCP i UDP z pliku pcap");
-    }
-#endif
-    d.cr = cairo_create(d.surf);
+    d.cfg = &a->cfg;
+    d.footer = PA_NAME " " PA_VERSION " · raport wygenerowany automatycznie";
     snprintf(d.header, sizeof d.header, "Raport analizy ruchu TCP/UDP · %s", a->name);
+    snprintf(title, sizeof title, "Raport analizy ruchu TCP/UDP – %s", a->name);
+    if (doc_open(&d, path, title, "Analiza komunikacji TCP i UDP z pliku pcap") != 0)
+        return -1;
 
-    doc_page_begin(&d);
     sec_title(&d);
     sec_summary(&d);
-    sec_architecture(&d);
-    sec_methods(&d);
     sec_traffic(&d, fs, png_written);
     sec_communication(&d, fs, png_written);
     sec_tcp(&d, fs, png_written);
@@ -1569,14 +1695,22 @@ int report_write_pdf(const analysis_t *a, const figure_set_t *fs, const char *pa
     sec_anomalies(&d);
     sec_data_desc(&d);
     sec_files(&d, fs, png_written);
-    doc_footer(&d);
-    cairo_show_page(d.cr);
+    return doc_close(&d);
+}
 
-    cairo_status_t st = cairo_status(d.cr);
-    cairo_destroy(d.cr);
-    cairo_surface_finish(d.surf);
-    if (st == CAIRO_STATUS_SUCCESS)
-        st = cairo_surface_status(d.surf);
-    cairo_surface_destroy(d.surf);
-    return st == CAIRO_STATUS_SUCCESS ? 0 : -1;
+int report_write_doc(const config_t *cfg, const char *path)
+{
+    doc_t d;
+    memset(&d, 0, sizeof d);
+    d.cfg = cfg;
+    d.footer = PA_NAME " " PA_VERSION " · dokumentacja wygenerowana automatycznie";
+    snprintf(d.header, sizeof d.header, "Dokumentacja narzędzia " PA_NAME " " PA_VERSION);
+    if (doc_open(&d, path, "Dokumentacja narzędzia " PA_NAME,
+                 "Architektura i metody analizy komunikacji TCP/UDP") != 0)
+        return -1;
+
+    sec_doc_title(&d);
+    sec_architecture(&d);
+    sec_methods(&d);
+    return doc_close(&d);
 }

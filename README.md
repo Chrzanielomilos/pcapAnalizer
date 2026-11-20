@@ -3,10 +3,15 @@
 Narzędzie wiersza poleceń dla Linuksa (Ubuntu), napisane w C11. Analizuje ruch TCP i UDP
 zapisany w plikach `.pcap`/`.pcapng` i dla każdego pliku generuje:
 
-* **raport PDF** z opisem metod analizy, prezentowanych danych i architektury narzędzia,
-  statystykami, tabelami, wykresami wektorowymi i listą wykrytych nieprawidłowości,
+* **raport PDF** ze statystykami, tabelami, wykresami wektorowymi, listą wykrytych
+  nieprawidłowości i opisem prezentowanych danych,
 * **12 wykresów PNG** (1600×900),
 * **listę przepływów CSV** i **podsumowanie tekstowe**.
+
+Dodatkowo, **raz na uruchomienie** (niezależnie od liczby plików), w głównym katalogu
+wynikowym powstaje **`dokumentacja_narzedzia.pdf`** — opis architektury narzędzia i metod
+analizy wraz z progami detektorów użytymi w tym uruchomieniu. Te treści nie są powtarzane
+w raportach poszczególnych plików.
 
 Zależności: `libpcap`, `cairo` (PNG + PDF), `libm` i czcionka DejaVu — wszystkie są
 w standardowych repozytoriach Ubuntu.
@@ -40,20 +45,26 @@ make
 
 Kody wyjścia: `0` — sukces, `1` — błąd przetwarzania pliku, `2` — błędne argumenty.
 
-Wynik dla pliku `zapis.pcap`:
+Wynik dla `./pcapanalyzer -o wyniki zapis.pcap`:
 
 ```
-wyniki/zapis/
-├── raport.pdf
-├── podsumowanie.txt
-├── przeplywy.csv
-├── 01_przeplywnosc.png          ├── 07_stany_przeplywow.png
-├── 02_natezenie_pakietow.png    ├── 08_przeplywy_czas_wolumen.png
-├── 03_protokoly.png             ├── 09_rtt_uzgadniania.png
-├── 04_rozmiary_pakietow.png     ├── 10_flagi_tcp.png
-├── 05_najaktywniejsze_hosty.png ├── 11_uzgadnianie_syn.png
-└── 06_uslugi.png                └── 12_problemy_tcp.png
+wyniki/
+├── dokumentacja_narzedzia.pdf     (jedna na uruchomienie: architektura i metody analizy)
+└── zapis/
+    ├── raport.pdf
+    ├── podsumowanie.txt
+    ├── przeplywy.csv
+    ├── 01_przeplywnosc.png          ├── 07_stany_przeplywow.png
+    ├── 02_natezenie_pakietow.png    ├── 08_przeplywy_czas_wolumen.png
+    ├── 03_protokoly.png             ├── 09_rtt_uzgadniania.png
+    ├── 04_rozmiary_pakietow.png     ├── 10_flagi_tcp.png
+    ├── 05_najaktywniejsze_hosty.png ├── 11_uzgadnianie_syn.png
+    └── 06_uslugi.png                └── 12_problemy_tcp.png
 ```
+
+Raport pliku zawiera sekcje: 1. Podsumowanie, 2. Statystyki ruchu, 3. Charakterystyka
+komunikacji, 4. Analiza protokołu TCP, 5. Analiza DNS, 6. Wykryte nieprawidłowości,
+7. Opis prezentowanych danych, Załącznik A. Pliki wynikowe.
 
 ## Co analizuje
 
@@ -71,8 +82,8 @@ wyniki/zapis/
   NXDOMAIN, beaconing (okresowa komunikacja), retransmisje, zerowe okno, zrywanie
   połączeń RST, skoki natężenia (mediana + MAD), problemy z jakością danych.
 
-Szczegółowy opis metod, progów i interpretacji znajduje się w samym raporcie PDF
-(sekcje 2, 3 i 9).
+Szczegółowy opis architektury, metod i progów znajduje się w `dokumentacja_narzedzia.pdf`,
+a interpretacja prezentowanych danych — w sekcji 7 każdego raportu.
 
 ## Architektura
 
