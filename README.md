@@ -115,6 +115,14 @@ plik.pcap ─► odczyt (libpcap) ─► dekoder L2–L4 ─► tablica przepły
 Analiza jest jednoprzebiegowa i strumieniowa: treść pakietów nie jest przechowywana,
 a pamięć zależy od liczby przepływów i hostów, nie od rozmiaru pliku.
 
+### Decyzje architektoniczne (ADR)
+
+Każdy wpis opisuje kontekst decyzji, jej uzasadnienie i konsekwencje dla analizy ruchu lub interpretacji raportów.
+
+* [ADR-001. Jednoprzebiegowy odczyt pakietów](docs/adr/ADR.md#adr-001-jednoprzebiegowy-odczyt-pakietów)
+* [ADR-002. Dwukierunkowe przepływy TCP i UDP](docs/adr/ADR.md#adr-002-dwukierunkowe-przepływy-tcp-i-udp)
+* [ADR-003. Wspólna dokumentacja dla raportów z jednego uruchomienia](docs/adr/ADR.md#adr-003-wspólna-dokumentacja-dla-raportów-z-jednego-uruchomienia)
+
 ## Testowe pliki pcap
 
 Katalog `tests/pcap` zawiera syntetyczne zapisy z poprawnymi sumami kontrolnymi.
