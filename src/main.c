@@ -208,23 +208,7 @@ int main(int argc, char **argv)
         return 2;
     }
 
-    /* Dokumentacja narzędzia - jeden plik na uruchomienie, wspólny dla
-     * wszystkich raportów. */
     int failed = 0;
-    char docpath[4096];
-    snprintf(docpath, sizeof docpath, "%s/%s", opt.outdir, DOC_FILE_NAME);
-    if (mkdir_p(opt.outdir) != 0) {
-        fprintf(stderr, PA_NAME ": nie można utworzyć katalogu %s: %s\n", opt.outdir,
-                strerror(errno));
-        return 1;
-    }
-    if (report_write_doc(&cfg, docpath) != 0) {
-        fprintf(stderr, PA_NAME ": błąd zapisu dokumentacji %s\n", docpath);
-        failed = 1;
-    } else if (!opt.quiet) {
-        printf("Dokumentacja narzędzia: %s\n\n", docpath);
-    }
-
     for (int i = optind; i < argc; i++)
         if (process_file(argv[i], &cfg, &opt) != 0)
             failed = 1;

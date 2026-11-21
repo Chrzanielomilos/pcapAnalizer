@@ -8,11 +8,6 @@ zapisany w plikach `.pcap`/`.pcapng` i dla każdego pliku generuje:
 * **12 wykresów PNG** (1600×900),
 * **listę przepływów CSV** i **podsumowanie tekstowe**.
 
-Dodatkowo, **raz na uruchomienie** (niezależnie od liczby plików), w głównym katalogu
-wynikowym powstaje **`dokumentacja_narzedzia.pdf`** — opis architektury narzędzia i metod
-analizy wraz z progami detektorów użytymi w tym uruchomieniu. Te treści nie są powtarzane
-w raportach poszczególnych plików.
-
 Zależności: `libpcap`, `cairo` (PNG + PDF), `libm` i czcionka DejaVu — wszystkie są
 w standardowych repozytoriach Ubuntu.
 
@@ -49,7 +44,6 @@ Wynik dla `./pcapanalyzer -o wyniki zapis.pcap`:
 
 ```
 wyniki/
-├── dokumentacja_narzedzia.pdf     (jedna na uruchomienie: architektura i metody analizy)
 └── zapis/
     ├── raport.pdf
     ├── podsumowanie.txt
@@ -82,8 +76,8 @@ komunikacji, 4. Analiza protokołu TCP, 5. Analiza DNS, 6. Wykryte nieprawidłow
   NXDOMAIN, beaconing (okresowa komunikacja), retransmisje, zerowe okno, zrywanie
   połączeń RST, skoki natężenia (mediana + MAD), problemy z jakością danych.
 
-Szczegółowy opis architektury, metod i progów znajduje się w `dokumentacja_narzedzia.pdf`,
-a interpretacja prezentowanych danych — w sekcji 7 każdego raportu.
+Interpretacja prezentowanych danych znajduje się w sekcji 7 każdego raportu, a aktualne
+progi detektorów można wypisać poleceniem `./pcapanalyzer -L`.
 
 ## Architektura
 
@@ -109,7 +103,6 @@ plik.pcap ─► odczyt (libpcap) ─► dekoder L2–L4 ─► tablica przepły
 | `src/figures.c/.h` | definicje 12 wykresów (wspólne dla PNG i PDF) |
 | `src/report.c/.h` | składanie raportu PDF (cairo-pdf) |
 | `src/util.c`, `src/common.h` | formatowanie, adresy, alokacja |
-| `tools/pcapgen.c` | generator testowych plików pcap |
 | `tests/run_tests.sh` | testy funkcjonalne |
 
 Analiza jest jednoprzebiegowa i strumieniowa: treść pakietów nie jest przechowywana,
@@ -118,7 +111,6 @@ a pamięć zależy od liczby przepływów i hostów, nie od rozmiaru pliku.
 ## Testowe pliki pcap
 
 Katalog `tests/pcap` zawiera syntetyczne zapisy z poprawnymi sumami kontrolnymi.
-Wygenerowano je deterministycznym generatorem `tools/pcapgen.c` (`make testdata`).
 
 | Plik | Scenariusz | Oczekiwane wyniki |
 |---|---|---|

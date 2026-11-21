@@ -3,9 +3,8 @@
  *
  * Prosty silnik układu strony: akapity z zawijaniem wierszy (UTF-8),
  * nagłówki z zakładkami PDF, listy punktowane, tabele z zawijaniem
- * tekstu w komórkach i powtarzaniem nagłówka po podziale strony,
- * wektorowe wykresy (te same definicje co pliki PNG) oraz diagram
- * architektury rysowany bezpośrednio w cairo.
+ * tekstu w komórkach i powtarzaniem nagłówka po podziale strony oraz
+ * wektorowe wykresy (te same definicje co pliki PNG).
  */
 #include "report.h"
 #include "charts.h"
@@ -13,7 +12,6 @@
 #include <cairo-pdf.h>
 #include <cairo.h>
 #include <math.h>
-#include <pcap/pcap.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,8 +33,6 @@
 #define FIG_LH 360.0
 
 #define COL_ZEBRA 0xf6f6f3
-#define COL_BOX   0xe7f0fc
-#define COL_BOXLN 0x86b6ef
 
 #if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 16, 0)
 #define HAVE_PDF_OUTLINE 1
@@ -49,8 +45,7 @@ typedef struct {
     int               page;
     int               fig_no, tab_no;
     int               outline_parent;
-    const analysis_t *a;          /* NULL w dokumentacji narzędzia        */
-    const config_t   *cfg;        /* progi detektorów (sekcja metod)      */
+    const analysis_t *a;
     const char       *footer;     /* tekst stopki                         */
     char              header[300];
 } doc_t;
@@ -518,7 +513,7 @@ static void doc_kv_table(doc_t *d, const cells_t *cb, const char *caption)
     doc_table(d, &t, cb, caption);
 }
 
-/* ======================= wykresy i diagram ======================= */
+/* ======================= wykresy ======================= */
 
 static void doc_caption(doc_t *d, const char *text)
 {
@@ -552,104 +547,6 @@ static void doc_figure(doc_t *d, const figure_t *f, int png_written)
     doc_caption(d, buf);
     doc_text(d, f->desc, 8.6, 0, COL_INK2, 0, 11.8);
     d->y += 14;
-}
-
-static void draw_box(cairo_t *cr, double x, double y, double w, double h,
-                     const char *t1, const char *t2, int io)
-{
-    rrect(cr, x, y, w, h, 5);
-    set_rgb(cr, io ? COL_PANEL : COL_BOX);
-    cairo_fill_preserve(cr);
-    set_rgb(cr, io ? COL_AXIS : COL_BOXLN);
-    cairo_set_line_width(cr, 0.9);
-    cairo_stroke(cr);
-    char buf[128];
-    use_font(cr, 8, 1);
-    set_rgb(cr, COL_INK);
-    fit_text(cr, t1, w - 8, buf, sizeof buf);
-    cairo_move_to(cr, x + (w - text_width(cr, buf)) / 2, y + h / 2 - 1.5);
-    cairo_show_text(cr, buf);
-    use_font(cr, 6.8, 0);
-    set_rgb(cr, COL_INK2);
-    fit_text(cr, t2, w - 8, buf, sizeof buf);
-    cairo_move_to(cr, x + (w - text_width(cr, buf)) / 2, y + h / 2 + 9.5);
-    cairo_show_text(cr, buf);
-}
-
-static void arrow_head(cairo_t *cr, double x, double y, double dx, double dy)
-{
-    double len = sqrt(dx * dx + dy * dy);
-    if (len <= 0)
-        return;
-    dx /= len;
-    dy /= len;
-    cairo_move_to(cr, x, y);
-    cairo_line_to(cr, x - 6 * dx + 3 * dy, y - 6 * dy - 3 * dx);
-    cairo_line_to(cr, x - 6 * dx - 3 * dy, y - 6 * dy + 3 * dx);
-    cairo_close_path(cr);
-    cairo_fill(cr);
-}
-
-static void arrow(cairo_t *cr, double x0, double y0, double x1, double y1)
-{
-    set_rgb(cr, COL_INK2);
-    cairo_set_line_width(cr, 1.1);
-    cairo_move_to(cr, x0, y0);
-    cairo_line_to(cr, x1 - (x1 > x0 ? 5 : x1 < x0 ? -5 : 0),
-                  y1 - (y1 > y0 ? 5 : y1 < y0 ? -5 : 0));
-    cairo_stroke(cr);
-    arrow_head(cr, x1, y1, x1 - x0, y1 - y0);
-}
-
-static void doc_arch_diagram(doc_t *d)
-{
-    static const char *const t1[8] = {
-        "Plik .pcap / .pcapng", "Odczyt pakietów", "Dekoder L2–L4", "Tablica przepływów",
-        "Agregatory statystyk", "Detektory anomalii", "Silnik wykresów", "Raport i eksport"
-    };
-    static const char *const t2[8] = {
-        "dane wejściowe", "libpcap · analyzer.c", "decoder.c", "flow.c",
-        "stats.c · analyzer.c", "anomaly.c", "charts.c · figures.c", "report.c · PNG · CSV"
-    };
-    cairo_t *cr = d->cr;
-    double gap = 20, bw = (CONTENT_W - 3 * gap) / 4, bh = 42;
-    doc_need(d, 2 * bh + 90);
-    double y1 = d->y + 4, y2 = y1 + bh + 36;
-    double x[4];
-    for (int i = 0; i < 4; i++)
-        x[i] = MARGIN_L + i * (bw + gap);
-
-    for (int i = 0; i < 4; i++) {
-        draw_box(cr, x[i], y1, bw, bh, t1[i], t2[i], i == 0);
-        draw_box(cr, x[i], y2, bw, bh, t1[4 + i], t2[4 + i], i == 3);
-    }
-    for (int i = 0; i < 3; i++) {
-        arrow(cr, x[i] + bw, y1 + bh / 2, x[i + 1], y1 + bh / 2);
-        arrow(cr, x[i] + bw, y2 + bh / 2, x[i + 1], y2 + bh / 2);
-    }
-    /* łącznik: tablica przepływów -> agregatory (przetwarzanie końcowe) */
-    double ym = y1 + bh + 18;
-    set_rgb(cr, COL_INK2);
-    cairo_set_line_width(cr, 1.1);
-    cairo_move_to(cr, x[3] + bw / 2, y1 + bh);
-    cairo_line_to(cr, x[3] + bw / 2, ym);
-    cairo_line_to(cr, x[0] + bw / 2, ym);
-    cairo_line_to(cr, x[0] + bw / 2, y2 - 5);
-    cairo_stroke(cr);
-    arrow_head(cr, x[0] + bw / 2, y2, 0, 1);
-    use_font(cr, 6.8, 0);
-    set_rgb(cr, COL_MUTED);
-    const char *lbl = "przetwarzanie końcowe po odczycie wszystkich pakietów";
-    cairo_move_to(cr, MARGIN_L + (CONTENT_W - text_width(cr, lbl)) / 2, ym - 3.5);
-    cairo_show_text(cr, lbl);
-
-    d->y = y2 + bh + 10;
-    d->fig_no++;
-    char buf[200];
-    snprintf(buf, sizeof buf, "Rys. %d. Architektura i przepływ danych w narzędziu "
-             PA_NAME, d->fig_no);
-    doc_caption(d, buf);
-    d->y += 6;
 }
 
 static void draw_tile(cairo_t *cr, double x, double y, double w, double h,
@@ -839,11 +736,7 @@ static void sec_title(doc_t *d)
         cairo_move_to(cr, col_x, row_y);
         cairo_show_text(cr, toc[i]);
     }
-    d->y += 4 * 12.5 + 14;
-    doc_text(d, "Architekturę narzędzia i zastosowane metody analizy opisano w osobnym "
-                "dokumencie " DOC_FILE_NAME ", zapisywanym jednorazowo w głównym katalogu "
-                "wynikowym (nadrzędnym względem katalogu tego raportu).",
-             8.2, 0, COL_INK2, 0, 11.2);
+    d->y += 4 * 12.5 + 10;
 }
 
 static void sec_summary(doc_t *d)
@@ -918,270 +811,6 @@ static void sec_summary(doc_t *d)
     else
         doc_para(d, "Szczegółowy opis każdej nieprawidłowości, wraz z interpretacją "
                     "i przedziałem czasu, zawiera sekcja 6.");
-}
-
-static void sec_architecture(doc_t *d)
-{
-    doc_heading(d, 1, "1. Architektura narzędzia");
-    doc_para(d,
-        "Narzędzie " PA_NAME " zostało napisane w języku C (standard C11) dla systemu Linux. "
-        "Jest programem wiersza poleceń, który dla każdego wskazanego pliku .pcap lub .pcapng "
-        "wykonuje jednoprzebiegową, strumieniową analizę pakietów, a następnie generuje "
-        "raport PDF, zestaw wykresów PNG, plik CSV z listą przepływów oraz podsumowanie "
-        "tekstowe. Niniejsza dokumentacja powstaje jednorazowo przy każdym uruchomieniu, "
-        "niezależnie od liczby analizowanych plików. Przetwarzanie ma charakter potokowy "
-        "(rys. 1).");
-    doc_arch_diagram(d);
-    doc_para(d,
-        "Moduł odczytu pobiera kolejne pakiety z pliku funkcjami pcap_open_offline() "
-        "i pcap_next_ex() biblioteki libpcap, co zapewnia obsługę formatów pcap i pcapng "
-        "oraz wielu typów warstwy łącza. Dekoder interpretuje nagłówki warstw 2–4 bez "
-        "kopiowania danych. Każdy pakiet aktualizuje statystyki globalne, adaptacyjne "
-        "szeregi czasowe, tablicę hostów i tablicę przepływów; treść pakietów nie jest "
-        "przechowywana (wyjątkiem jest bieżąca analiza nazw DNS), dlatego zużycie pamięci "
-        "zależy od liczby przepływów i hostów, a nie od rozmiaru pliku. Po odczytaniu "
-        "wszystkich pakietów następuje przetwarzanie końcowe (klasyfikacja przepływów, "
-        "rozkład czasów uzgadniania), uruchomienie detektorów nieprawidłowości, budowa "
-        "wykresów i złożenie raportu.");
-
-    doc_heading(d, 2, "1.1. Moduły programu");
-    {
-        static const char *const hdr[] = {"Moduł", "Pliki", "Odpowiedzialność"};
-        static const double w[] = {0.20, 0.22, 0.58};
-        tspec_t t = {3, hdr, w, "lll"};
-        cells_t cb = {0};
-        cell(&cb, "Interfejs CLI"); cell(&cb, "main.c");
-        cell(&cb, "Opcje wiersza poleceń, przetwarzanie wielu plików, katalogi wynikowe, "
-                  "zapis PNG, PDF, CSV i podsumowania.");
-        cell(&cb, "Analiza"); cell(&cb, "analyzer.c, analyzer.h");
-        cell(&cb, "Odczyt pakietów przez libpcap, aktualizacja agregatów, przetwarzanie "
-                  "końcowe, konfiguracja progów detekcji.");
-        cell(&cb, "Dekoder"); cell(&cb, "decoder.c, decoder.h");
-        cell(&cb, "Ethernet z 802.1Q/802.1ad, Linux SLL/SLL2, loopback, raw IP; IPv4 "
-                  "(suma kontrolna, fragmentacja), IPv6 (nagłówki rozszerzeń); TCP (opcje "
-                  "MSS, WS, SACK) i UDP.");
-        cell(&cb, "Przepływy"); cell(&cb, "flow.c, flow.h");
-        cell(&cb, "Tablica mieszająca dwukierunkowych przepływów, maszyna stanów TCP, "
-                  "analiza numerów sekwencyjnych i potwierdzeń.");
-        cell(&cb, "Statystyki"); cell(&cb, "stats.c, stats.h");
-        cell(&cb, "Adaptacyjne szeregi czasowe, tablica hostów, histogram rozmiarów, "
-                  "analiza zapytań DNS.");
-        cell(&cb, "Detektory"); cell(&cb, "anomaly.c, anomaly.h");
-        cell(&cb, "Wykrywanie skanowania, ataków DoS, naruszeń protokołu, tunelowania DNS, "
-                  "beaconingu, problemów jakości TCP i skoków natężenia.");
-        cell(&cb, "Wykresy"); cell(&cb, "charts.c, figures.c");
-        cell(&cb, "Silnik wykresów (liniowe, słupkowe, punktowe) rysujący na dowolnej "
-                  "powierzchni cairo; definicje 12 wykresów raportu.");
-        cell(&cb, "Raport"); cell(&cb, "report.c, report.h");
-        cell(&cb, "Układ strony PDF: akapity, tabele, zakładki, osadzanie wektorowych wykresów; "
-                  "raporty analizy i niniejsza dokumentacja.");
-        cell(&cb, "Narzędzia"); cell(&cb, "util.c, common.h");
-        cell(&cb, "Alokacja pamięci, formatowanie liczb (konwencja polska), adresy IP, "
-                  "nazwy usług.");
-        doc_table(d, &t, &cb, "Moduły programu i ich odpowiedzialność");
-        cells_free(&cb);
-    }
-
-    doc_heading(d, 2, "1.2. Zależności");
-    doc_bullet(d, "libpcap (pakiet libpcap-dev) – odczyt plików pcap/pcapng i obsługa typów "
-                  "warstwy łącza.");
-    doc_bullet(d, "cairo (pakiet libcairo2-dev) – rysowanie wykresów oraz zapis plików PNG "
-                  "i dokumentu PDF z osadzonymi czcionkami.");
-    doc_bullet(d, "Standardowa biblioteka C (glibc) i biblioteka matematyczna libm.");
-    doc_bullet(d, "Czcionka DejaVu Sans (pakiet fonts-dejavu-core) wyszukiwana przez "
-                  "fontconfig – zapewnia polskie znaki diakrytyczne.");
-    doc_para(d, "Program nie wymaga interpreterów ani dodatkowych bibliotek; wszystkie "
-                "zależności są dostępne w standardowych repozytoriach Ubuntu.");
-
-    doc_heading(d, 2, "1.3. Struktury danych i złożoność");
-    doc_bullet(d, "Tablica przepływów: haszowanie FNV-1a kanonicznego klucza (adresy, porty, "
-                  "protokół) z łańcuchowaniem i podwajaniem liczby kubełków – średni koszt "
-                  "obsługi pakietu O(1).");
-    doc_bullet(d, "Szeregi czasowe: stała liczba 4096 przedziałów; po przekroczeniu zakresu "
-                  "sąsiednie przedziały są scalane, a szerokość przedziału podwajana (od 1 ms). "
-                  "Pamięć jest stała niezależnie od długości zapisu.");
-    doc_bullet(d, "Detektory: rekordy przepływów są sortowane według różnych kluczy "
-                  "(źródło–cel–port, źródło–port–cel, cel–port–źródło), a liczności grup "
-                  "wyznaczane w jednym przejściu – O(n log n) względem liczby przepływów.");
-    doc_bullet(d, "Odporność: każdy odczyt nagłówka jest poprzedzony kontrolą długości "
-                  "zapisanych danych; uszkodzone pakiety są klasyfikowane, a nie odrzucane.");
-
-    doc_heading(d, 2, "1.4. Uruchamianie i pliki wynikowe");
-    doc_para(d, "Program uruchamia się poleceniem " PA_NAME " [opcje] plik.pcap [plik2.pcap …]. "
-                "W katalogu wynikowym (opcja -o, domyślnie „wyniki”) powstaje:");
-    {
-        static const char *const hdr[] = {"Ścieżka", "Zawartość"};
-        static const double w[] = {0.40, 0.60};
-        tspec_t t = {2, hdr, w, "ll"};
-        cells_t cb = {0};
-        cell(&cb, DOC_FILE_NAME);
-        cell(&cb, "Niniejsza dokumentacja: architektura narzędzia i metody analizy wraz "
-                  "z progami detektorów użytymi w danym uruchomieniu (jeden plik na uruchomienie).");
-        cell(&cb, "<nazwa pliku>/raport.pdf");
-        cell(&cb, "Raport z wynikami analizy danego pliku pcap.");
-        cell(&cb, "<nazwa pliku>/*.png");
-        cell(&cb, "12 wykresów (1600×900) – te same, które osadzono w raporcie.");
-        cell(&cb, "<nazwa pliku>/przeplywy.csv");
-        cell(&cb, "Lista wszystkich przepływów z licznikami i wskaźnikami jakości TCP.");
-        cell(&cb, "<nazwa pliku>/podsumowanie.txt");
-        cell(&cb, "Podsumowanie tekstowe z listą nieprawidłowości.");
-        doc_table(d, &t, &cb, "Struktura katalogu wynikowego");
-        cells_free(&cb);
-    }
-    doc_para(d, "Najważniejsze opcje: -t N (długość list rankingowych), -T klucz=wartość "
-                "(zmiana progu detektora, np. -T scan_ports=100), -L (lista progów), "
-                "-n (bez plików PNG), -c (bez pliku CSV), -q (bez podsumowania na wyjściu). "
-                "Kod wyjścia 0 oznacza sukces, 1 – błąd przetwarzania co najmniej jednego "
-                "pliku, 2 – błędne argumenty.");
-}
-
-static void sec_methods(doc_t *d)
-{
-    const config_t *c = d->cfg;
-    char b[64];
-
-    doc_heading(d, 1, "2. Metody analizy");
-    doc_heading(d, 2, "2.1. Dekodowanie pakietów");
-    doc_para(d,
-        "Dla każdej ramki rozpoznawany jest typ warstwy łącza zapisany w nagłówku pliku "
-        "(Ethernet, Linux cooked capture SLL/SLL2, loopback BSD, surowe IP). W ramkach "
-        "Ethernet pomijane są znaczniki VLAN 802.1Q i 802.1ad (QinQ). W nagłówku IPv4 "
-        "weryfikowana jest suma kontrolna i rozpoznawana fragmentacja (kolejne fragmenty nie "
-        "zawierają nagłówka L4), w IPv6 – przetwarzany jest łańcuch nagłówków rozszerzeń "
-        "(Hop-by-Hop, Routing, Destination, Fragment, AH). Z nagłówka TCP odczytywane są "
-        "porty, numery sekwencyjne, flagi, okno oraz opcje MSS, Window Scale i SACK, "
-        "a z UDP – porty i długość. Długość danych warstwy 4 wyznaczana jest z pól długości "
-        "nagłówków IP, co eliminuje wpływ dopełnienia ramek Ethernet. Wolumen ruchu liczony "
-        "jest jako suma oryginalnych długości ramek (pole len rekordu pcap).");
-
-    doc_heading(d, 2, "2.2. Rekonstrukcja przepływów");
-    snprintf(b, sizeof b, "%g", c->idle_timeout);
-    doc_paraf(d,
-        "Przepływ to dwukierunkowa wymiana pakietów identyfikowana piątką: protokół, adresy "
-        "i porty obu stron. Klucz jest kanonizowany (mniejszy punkt końcowy zawsze na "
-        "pierwszym miejscu), dzięki czemu oba kierunki trafiają do tego samego rekordu. "
-        "Inicjatorem (klientem) jest nadawca segmentu SYN; jeśli pierwszy zaobserwowany "
-        "pakiet to SYN-ACK, inicjatorem jest jego odbiorca, a w pozostałych przypadkach "
-        "(UDP, połączenia rozpoczęte przed zapisem) – strona używająca portu "
-        "niestandardowego, gdy druga strona używa portu dobrze znanego (< 1024 lub "
-        "rozpoznanej usługi). Nowy przepływ na tej samej piątce rozpoczyna się po %s s "
-        "bezczynności lub po segmencie SYN następującym po zakończeniu (FIN/RST) "
-        "poprzedniego połączenia.", b);
-
-    doc_heading(d, 2, "2.3. Analiza stanu i jakości połączeń TCP");
-    doc_para(d,
-        "Dla każdego połączenia śledzone są segmenty uzgadniania trójetapowego. Czas "
-        "uzgadniania to odstęp między segmentem SYN a końcowym ACK klienta; przy "
-        "przechwytywaniu po stronie klienta przybliża on czas podróży w obie strony (RTT). "
-        "Na końcu analizy każdy przepływ jest klasyfikowany: zakończony (FIN w obu "
-        "kierunkach), zerwany (RST po nawiązaniu), otwarty, półotwarty (SYN-ACK bez "
-        "końcowego ACK), odrzucony (odpowiedź RST na SYN), bez odpowiedzi oraz rozpoczęty "
-        "przed początkiem zapisu.");
-    doc_para(d,
-        "Analiza numerów sekwencyjnych prowadzona jest osobno dla każdego kierunku "
-        "z użyciem arytmetyki modulo 2^32. Dla każdego segmentu niosącego dane (lub flagi "
-        "SYN/FIN) porównywany jest jego numer z najwyższym oczekiwanym numerem:");
-    doc_bullet(d, "numer równy oczekiwanemu – segment w kolejności;");
-    doc_bullet(d, "numer większy – luka (segment niezarejestrowany w punkcie przechwytywania, "
-                  "np. utracony przed nim);");
-    doc_bullet(d, "numer mniejszy – segment poza kolejnością, jeśli wypełnia lukę powstałą "
-                  "w czasie krótszym niż połowa RTT (lub 3 ms przy nieznanym RTT), "
-                  "w przeciwnym razie retransmisja; jednobajtowe segmenty o numerze o 1 "
-                  "mniejszym od oczekiwanego uznawane są za keep-alive.");
-    doc_para(d,
-        "Zduplikowane potwierdzenie (dup ACK) to segment bez danych i bez flag SYN/FIN, "
-        "powtarzający numer potwierdzenia i okno poprzedniego segmentu, gdy druga strona "
-        "ma niepotwierdzone dane. Zerowe okno to segment ogłaszający rozmiar okna 0.");
-
-    doc_heading(d, 2, "2.4. Statystyki i szeregi czasowe");
-    doc_para(d,
-        "Statystyki globalne obejmują liczniki pakietów i bajtów według protokołów, rozkład "
-        "długości ramek, liczniki flag TCP i niedozwolonych kombinacji flag. Szeregi czasowe "
-        "(pakiety i bajty według protokołu oraz liczniki zdarzeń TCP) gromadzone są "
-        "w adaptacyjnych przedziałach; do wykresów agregowane są do co najwyżej 300 "
-        "przedziałów, a do wykrywania skoków natężenia – do przedziałów jednosekundowych. "
-        "Wartości na wykresach przeliczane są na jednostkę czasu (pakiety/s, bity/s), "
-        "co czyni je niezależnymi od szerokości przedziału. Rankingi hostów i usług "
-        "tworzone są według wolumenu ruchu.");
-
-    doc_heading(d, 2, "2.5. Analiza DNS");
-    doc_para(d,
-        "Datagramy UDP z portem 53 są dekodowane: nagłówek (typ komunikatu, kod odpowiedzi) "
-        "oraz nazwa i typ pierwszego pytania. Liczone są zapytania, odpowiedzi, odpowiedzi "
-        "NXDOMAIN i SERVFAIL oraz typy zapytań. Zapytanie uznawane jest za podejrzane "
-        "(możliwe tunelowanie), gdy najdłuższa etykieta ma co najmniej 40 znaków, cała "
-        "nazwa co najmniej 90 znaków, albo etykieta ma co najmniej 24 znaki i entropię "
-        "Shannona co najmniej 3,8 bita na znak (charakterystyczne dla danych zakodowanych "
-        "w base32/base64/hex).");
-
-    doc_heading(d, 2, "2.6. Wykrywanie nieprawidłowości");
-    doc_para(d,
-        "Detektory działają po zakończeniu odczytu, na zbiorze przepływów, szeregach czasowych "
-        "i statystykach DNS. Tabela przedstawia zastosowane kryteria i progi (wartości "
-        "z bieżącego uruchomienia; można je zmienić opcją -T klucz=wartość).");
-    {
-        static const char *const hdr[] = {"Detektor", "Metoda", "Próg"};
-        static const double w[] = {0.22, 0.48, 0.30};
-        tspec_t t = {3, hdr, w, "lll"};
-        cells_t cb = {0};
-        cell(&cb, "Skanowanie pionowe");
-        cell(&cb, "Liczba różnych portów docelowych w parze źródło–cel i udział prób bez "
-                  "odpowiedzi lub odrzuconych.");
-        cell(&cb, "≥ %d portów, ≥ %.0f%% nieudanych", c->scan_ports, c->scan_fail_ratio * 100);
-        cell(&cb, "Skanowanie poziome");
-        cell(&cb, "Liczba różnych hostów docelowych dla pary źródło–port usługi.");
-        cell(&cb, "≥ %d hostów, ≥ %.0f%% nieudanych", c->scan_hosts, c->scan_fail_ratio * 100);
-        cell(&cb, "SYN flood");
-        cell(&cb, "Połączenia półotwarte i bez odpowiedzi do jednej usługi TCP.");
-        cell(&cb, "≥ %d połączeń, ≥ %.0f%% wszystkich", c->synflood_halfopen,
-             c->synflood_ratio * 100);
-        cell(&cb, "UDP flood");
-        cell(&cb, "Liczba pakietów, średnie natężenie i udział odpowiedzi dla usługi UDP.");
-        cell(&cb, "≥ %d pakietów, ≥ %g pkt/s, odpowiedzi ≤ %.0f%%", c->udpflood_pkts,
-             c->udpflood_pps, c->udpflood_resp_ratio * 100);
-        cell(&cb, "Niedozwolone flagi TCP");
-        cell(&cb, "Kombinacje NULL, XMAS, SYN+FIN, SYN+RST, FIN bez ACK.");
-        cell(&cb, "każde wystąpienie");
-        cell(&cb, "Tunelowanie DNS");
-        cell(&cb, "Heurystyka długości i entropii nazw (p. 2.5) w zapytaniach jednego hosta.");
-        cell(&cb, "≥ %d zapytań", c->dns_suspicious);
-        cell(&cb, "NXDOMAIN");
-        cell(&cb, "Udział odpowiedzi o nieistniejącej domenie (min. 20 odpowiedzi).");
-        cell(&cb, "≥ %.0f%%", c->nxdomain_ratio * 100);
-        cell(&cb, "Beaconing");
-        cell(&cb, "Regularność odstępów między kolejnymi połączeniami klient–serwer–port "
-                  "(współczynnik zmienności CV = odchylenie / średnia).");
-        cell(&cb, "≥ %d połączeń, CV ≤ %g, odstęp ≥ %g s", c->beacon_min_flows,
-             c->beacon_max_cv, c->beacon_min_interval);
-        cell(&cb, "Retransmisje TCP");
-        cell(&cb, "Udział retransmisji w segmentach z danymi – globalnie i w przepływie.");
-        cell(&cb, "≥ %.1f%% globalnie, ≥ %.0f%% w przepływie (min. %d segm.)",
-             c->retrans_rate * 100, c->flow_retrans_rate * 100, c->flow_min_segs);
-        cell(&cb, "Zerowe okno, RST");
-        cell(&cb, "Zdarzenia zerowego okna; udział nawiązanych połączeń zerwanych przez RST.");
-        cell(&cb, "> 0 zdarzeń; ≥ %.0f%% połączeń", c->rst_ratio * 100);
-        cell(&cb, "Nieudane połączenia");
-        cell(&cb, "Połączenia bez odpowiedzi i odrzucone (gdy nie wyjaśnia ich skanowanie "
-                  "ani atak).");
-        cell(&cb, "≥ %d prób", c->unanswered_min);
-        cell(&cb, "Skoki natężenia");
-        cell(&cb, "Pakiety/s w przedziałach 1 s porównane z medianą i odchyleniem MAD "
-                  "(odporne na wartości odstające).");
-        cell(&cb, "> mediana + %g·1,4826·MAD, > 3×mediana, > %g pkt/s", c->spike_k,
-             c->spike_min_pps);
-        cell(&cb, "Jakość danych");
-        cell(&cb, "Obcięte i niespójne nagłówki, błędne sumy kontrolne, fragmentacja, "
-                  "cofające się znaczniki czasu, uszkodzony plik.");
-        cell(&cb, "każde wystąpienie");
-        doc_table(d, &t, &cb, "Detektory nieprawidłowości i zastosowane progi");
-        cells_free(&cb);
-    }
-    doc_para(d,
-        "Poziomy ważności: WYSOKI – zjawisko o wysokim prawdopodobieństwie złośliwego "
-        "charakteru (skanowanie, atak DoS, tunelowanie, spreparowane pakiety); ŚREDNI – "
-        "zjawisko wymagające analizy (np. regularna komunikacja, wysoki poziom "
-        "retransmisji); NISKI – drobna nieprawidłowość lub objaw problemów wydajnościowych; "
-        "INFO – obserwacja bez negatywnej oceny (np. charakterystyka danych wejściowych).");
 }
 
 static void sec_traffic(doc_t *d, const figure_set_t *fs, int png)
@@ -1565,75 +1194,6 @@ static void sec_files(doc_t *d, const figure_set_t *fs, int png)
         }
     doc_table(d, &t, &cb, "Pliki wynikowe");
     cells_free(&cb);
-    doc_para(d, "Opis architektury narzędzia i metod analizy znajduje się w pliku "
-                DOC_FILE_NAME " w głównym katalogu wynikowym.");
-}
-
-/* Strona tytułowa dokumentacji narzędzia. */
-static void sec_doc_title(doc_t *d)
-{
-    cairo_t *cr = d->cr;
-    char now[64], libs[200];
-
-    d->y = 120;
-    use_font(cr, 9, 1);
-    set_rgb(cr, COL_TCP);
-    cairo_move_to(cr, MARGIN_L, d->y);
-    cairo_show_text(cr, "DOKUMENTACJA NARZĘDZIA");
-    d->y += 34;
-    use_font(cr, 26, 1);
-    set_rgb(cr, COL_INK);
-    cairo_move_to(cr, MARGIN_L, d->y);
-    cairo_show_text(cr, PA_NAME);
-    d->y += 24;
-    use_font(cr, 12.5, 0);
-    set_rgb(cr, COL_INK2);
-    cairo_move_to(cr, MARGIN_L, d->y);
-    cairo_show_text(cr, "Architektura i metody analizy komunikacji TCP/UDP");
-    d->y += 34;
-
-    doc_para(d,
-        "Dokument opisuje budowę i sposób działania narzędzia: architekturę, moduły, "
-        "zależności, struktury danych oraz metody analizy i kryteria wykrywania "
-        "nieprawidłowości. Jest wspólny dla wszystkich raportów wygenerowanych w tym "
-        "uruchomieniu programu – raporty poszczególnych plików pcap zawierają wyłącznie "
-        "wyniki analizy i opis prezentowanych danych.");
-    d->y += 6;
-
-    cells_t cb = {0};
-    fmt_timestamp((double)time(NULL), now, sizeof now);
-    snprintf(libs, sizeof libs, "%s; cairo %s", pcap_lib_version(), cairo_version_string());
-    cell(&cb, "Narzędzie");          cell(&cb, PA_NAME " " PA_VERSION);
-    cell(&cb, "Data wygenerowania"); cell(&cb, "%s", now);
-    cell(&cb, "Biblioteki");         cell(&cb, "%s", libs);
-    cell(&cb, "Progi detektorów");
-    cell(&cb, "wartości użyte w tym uruchomieniu – tabela w punkcie 2.6");
-    static const double w[] = {0.28, 0.72};
-    tspec_t t = {2, NULL, w, "ll"};
-    doc_table(d, &t, &cb, NULL);
-    cells_free(&cb);
-
-    use_font(cr, 8.5, 1);
-    set_rgb(cr, COL_INK2);
-    cairo_move_to(cr, MARGIN_L, d->y + 8);
-    cairo_show_text(cr, "Zawartość dokumentu");
-    d->y += 16;
-    static const char *const toc[] = {
-        "1. Architektura narzędzia", "1.1. Moduły programu", "1.2. Zależności",
-        "1.3. Struktury danych i złożoność", "1.4. Uruchamianie i pliki wynikowe",
-        "2. Metody analizy", "2.1. Dekodowanie pakietów", "2.2. Rekonstrukcja przepływów",
-        "2.3. Analiza stanu i jakości połączeń TCP", "2.4. Statystyki i szeregi czasowe",
-        "2.5. Analiza DNS", "2.6. Wykrywanie nieprawidłowości"
-    };
-    use_font(cr, 8.5, 0);
-    set_rgb(cr, COL_INK);
-    for (size_t i = 0; i < ARRAY_LEN(toc); i++) {
-        double col_x = MARGIN_L + (i < 5 ? 0 : CONTENT_W / 2) + (strchr(toc[i] + 2, '.') ? 12 : 0);
-        double row_y = d->y + (double)(i < 5 ? i : i - 5) * 12.5 + 8;
-        cairo_move_to(cr, col_x, row_y);
-        cairo_show_text(cr, toc[i]);
-    }
-    d->y += 7 * 12.5 + 10;
 }
 
 /* ======================= API ======================= */
@@ -1679,7 +1239,6 @@ int report_write_pdf(const analysis_t *a, const figure_set_t *fs, const char *pa
     char title[400];
     memset(&d, 0, sizeof d);
     d.a = a;
-    d.cfg = &a->cfg;
     d.footer = PA_NAME " " PA_VERSION " · raport wygenerowany automatycznie";
     snprintf(d.header, sizeof d.header, "Raport analizy ruchu TCP/UDP · %s", a->name);
     snprintf(title, sizeof title, "Raport analizy ruchu TCP/UDP – %s", a->name);
@@ -1695,22 +1254,5 @@ int report_write_pdf(const analysis_t *a, const figure_set_t *fs, const char *pa
     sec_anomalies(&d);
     sec_data_desc(&d);
     sec_files(&d, fs, png_written);
-    return doc_close(&d);
-}
-
-int report_write_doc(const config_t *cfg, const char *path)
-{
-    doc_t d;
-    memset(&d, 0, sizeof d);
-    d.cfg = cfg;
-    d.footer = PA_NAME " " PA_VERSION " · dokumentacja wygenerowana automatycznie";
-    snprintf(d.header, sizeof d.header, "Dokumentacja narzędzia " PA_NAME " " PA_VERSION);
-    if (doc_open(&d, path, "Dokumentacja narzędzia " PA_NAME,
-                 "Architektura i metody analizy komunikacji TCP/UDP") != 0)
-        return -1;
-
-    sec_doc_title(&d);
-    sec_architecture(&d);
-    sec_methods(&d);
     return doc_close(&d);
 }

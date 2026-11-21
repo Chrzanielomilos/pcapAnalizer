@@ -2,7 +2,6 @@
 #
 #   make            kompilacja programu
 #   make deps       instalacja zależności (Ubuntu/Debian, wymaga sudo)
-#   make testdata   wygenerowanie testowych plików pcap (tests/pcap)
 #   make test       testy na dołączonych plikach pcap
 #   make demo       raporty dla wszystkich plików testowych (katalog wyniki/)
 #   make clean      usunięcie artefaktów kompilacji i wyników
@@ -21,7 +20,7 @@ SRC  := $(wildcard src/*.c)
 OBJ  := $(SRC:src/%.c=build/%.o)
 HDR  := $(wildcard src/*.h)
 
-.PHONY: all deps test testdata demo clean
+.PHONY: all deps test demo clean
 
 all: $(BIN)
 
@@ -34,14 +33,6 @@ build/%.o: src/%.c $(HDR) | build
 build:
 	mkdir -p build
 
-# -ffp-contract=off: bez łączenia mnożenia i dodawania (FMA), aby generator
-# dawał identyczne pliki na każdej architekturze.
-tools/pcapgen: tools/pcapgen.c
-	$(CC) $(CFLAGS) -ffp-contract=off -o $@ $<
-
-testdata: tools/pcapgen
-	./tools/pcapgen tests/pcap
-
 test: $(BIN)
 	bash tests/run_tests.sh
 
@@ -53,4 +44,4 @@ deps:
 	sudo apt-get install -y build-essential pkg-config libpcap-dev libcairo2-dev fonts-dejavu-core
 
 clean:
-	rm -rf build $(BIN) tools/pcapgen wyniki tests/out
+	rm -rf build $(BIN) wyniki tests/out

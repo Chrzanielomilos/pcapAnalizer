@@ -80,34 +80,6 @@ has   "typ łącza Linux SLL" 'LINUX_SLL'
 has   "ruch IPv6" 'IPv6: [1-9]'
 hasnt "brak nieprawidłowości o poziomie WYSOKI" '\[WYSOKI\]'
 
-echo "== dokumentacja narzędzia (jeden plik na uruchomienie)"
-if [ -s "$OUT/dokumentacja_narzedzia.pdf" ] && head -c 5 "$OUT/dokumentacja_narzedzia.pdf" | grep -q '%PDF-'; then
-    ok "dokumentacja w głównym katalogu wynikowym"
-else
-    bad "dokumentacja w głównym katalogu wynikowym"
-fi
-"$BIN" -q -o "$OUT/wiele" "$PCAP/01_normal_traffic.pcap" "$PCAP/06_linux_sll_ipv6.pcap"
-ndoc=$(find "$OUT/wiele" -name 'dokumentacja_narzedzia.pdf' | wc -l)
-if [ "$ndoc" -eq 1 ] && [ -s "$OUT/wiele/dokumentacja_narzedzia.pdf" ]; then
-    ok "dwa pliki wejściowe: dokładnie jedna dokumentacja"
-else
-    bad "dwa pliki wejściowe: dokładnie jedna dokumentacja (jest: $ndoc)"
-fi
-if command -v pdftotext >/dev/null 2>&1; then
-    rtxt=$(pdftotext "$OUT/wiele/01_normal_traffic/raport.pdf" - 2>/dev/null)
-    dtxt=$(pdftotext "$OUT/wiele/dokumentacja_narzedzia.pdf" - 2>/dev/null)
-    if echo "$rtxt" | grep -Eq 'Architektura narzędzia|Metody analizy|Moduły programu'; then
-        bad "raport bez sekcji o architekturze i metodach"
-    else
-        ok "raport bez sekcji o architekturze i metodach"
-    fi
-    if echo "$dtxt" | grep -q 'Architektura narzędzia' && echo "$dtxt" | grep -q 'Metody analizy'; then
-        ok "dokumentacja zawiera architekturę i metody analizy"
-    else
-        bad "dokumentacja zawiera architekturę i metody analizy"
-    fi
-fi
-
 echo "== odporność na błędne dane"
 head -c 300000 "$PCAP/01_normal_traffic.pcap" > "$OUT/obciety.pcap"
 if "$BIN" -q -o "$OUT" "$OUT/obciety.pcap" 2>/dev/null && [ -s "$OUT/obciety/raport.pdf" ]; then
@@ -129,21 +101,6 @@ if [ $? -eq 2 ]; then ok "nieznany próg: kod wyjścia 2"; else bad "nieznany pr
 SUM="$OUT/progi/02_port_scan/podsumowanie.txt"
 [ -s "$SUM" ] || SUM=/dev/null
 hasnt "zmiana progów opcją -T wyłącza detekcję skanowania" 'Skanowanie'
-
-# Odtwarzalność plików testowych (informacyjnie - nie wpływa na wynik testów).
-if [ -f tools/pcapgen.c ] && command -v "${CC:-gcc}" >/dev/null 2>&1; then
-    echo "== odtwarzalność plików testowych (tools/pcapgen)"
-    if "${CC:-gcc}" -O2 -ffp-contract=off -o "$OUT/pcapgen" tools/pcapgen.c 2>/dev/null &&
-       "$OUT/pcapgen" "$OUT/regen" >/dev/null; then
-        for f in "$PCAP"/*.pcap; do
-            if cmp -s "$f" "$OUT/regen/$(basename "$f")"; then
-                echo "  OK    $(basename "$f") identyczny z wygenerowanym"
-            else
-                echo "  UWAGA $(basename "$f") różni się od pliku z pcapgen"
-            fi
-        done
-    fi
-fi
 
 echo
 echo "Wynik: $pass zaliczonych, $fail niezaliczonych"
