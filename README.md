@@ -114,7 +114,7 @@ Każdy wpis opisuje kontekst decyzji, jej uzasadnienie i konsekwencje dla analiz
 
 * [ADR-001. Jednoprzebiegowy odczyt pakietów](docs/adr/ADR.md#adr-001-jednoprzebiegowy-odczyt-pakietów)
 * [ADR-002. Dwukierunkowe przepływy TCP i UDP](docs/adr/ADR.md#adr-002-dwukierunkowe-przepływy-tcp-i-udp)
-* [ADR-003. Wspólna dokumentacja dla raportów z jednego uruchomienia](docs/adr/ADR.md#adr-003-wspólna-dokumentacja-dla-raportów-z-jednego-uruchomienia)
+* [ADR-003. Dokumentacja narzędzia oddzielona od raportów](docs/adr/ADR.md#adr-003-dokumentacja-narzędzia-oddzielona-od-raportów)
 
 ## Testowe pliki pcap
 

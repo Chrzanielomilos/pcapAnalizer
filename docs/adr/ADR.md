@@ -18,10 +18,10 @@ Poniższe decyzje mają status **wdrożone**. Opisują sposób działania analiz
 
 **Konsekwencje.** Jeden rekord pozwala prześledzić uzgadnianie TCP lub sprawdzić, czy ruch UDP był dwukierunkowy. Długa przerwa może podzielić jedną sesję aplikacji na kilka przepływów. Dla UDP i dla zapisu TCP rozpoczynającego się w trakcie połączenia przypisanie ról klienta i serwera opiera się na portach i kierunku pierwszego zaobserwowanego pakietu.
 
-## ADR-003. Wspólna dokumentacja dla raportów z jednego uruchomienia
+## ADR-003. Dokumentacja narzędzia oddzielona od raportów
 
-**Kontekst.** Jedno wywołanie programu może objąć kilka plików pcap. Wyniki dotyczą poszczególnych plików, a metody analizy i ustawione progi detektorów obowiązują dla całego wywołania.
+**Kontekst.** Jedno wywołanie programu może objąć kilka plików pcap. Opis architektury i metod analizy jest taki sam dla każdego pliku, więc powtarzanie go w każdym raporcie wydłużało dokumenty i dublowało treść.
 
-**Decyzja.** Program zapisuje `dokumentacja_narzedzia.pdf` raz w głównym katalogu wynikowym. Dokument opisuje architekturę, metody analizy i progi użyte podczas tego uruchomienia. W podkatalogu każdego analizowanego pliku powstaje `raport.pdf` z wynikami i objaśnieniem prezentowanych danych. [Obsługa wielu plików](../../src/main.c) · [Zawartość obu dokumentów](../../src/report.c)
+**Decyzja.** Program generuje wyłącznie wyniki analizy. W podkatalogu każdego analizowanego pliku powstaje `raport.pdf` z wynikami i objaśnieniem prezentowanych danych, a obok niego wykresy PNG, `przeplywy.csv` i `podsumowanie.txt`. Opis architektury i metod analizy znajduje się w statycznym pliku `dokumentacja_narzedzia.pdf` w katalogu głównym projektu, który jest utrzymywany niezależnie od programu: program go nie tworzy ani nie aktualizuje. Progi detektorów obowiązujące w danym wywołaniu wypisuje `pcapanalyzer -L` uruchomione z tymi samymi opcjami `-T`, podanymi przed `-L`. [Obsługa wielu plików](../../src/main.c) · [Zawartość raportu](../../src/report.c) · [Progi detektorów](../../src/analyzer.c)
 
-**Konsekwencje.** Cała seria raportów korzysta z jednego opisu metod. Przy archiwizacji lub przekazywaniu pojedynczego raportu warto dołączyć wspólny PDF, aby odbiorca mógł sprawdzić progi zastosowane w analizie.
+**Konsekwencje.** Raporty są krótsze i zawierają tylko treści dotyczące analizowanego pliku. Dokumentacja nie powstaje automatycznie, więc po zmianie metod analizy lub domyślnych progów trzeba ją zaktualizować ręcznie. Progi opisane w dokumentacji to wartości domyślne z chwili jej przygotowania. Jeśli analizę uruchomiono z opcją `-T`, faktycznie użytych progów nie zapisuje ani raport, ani pozostałe pliki wynikowe, dlatego trzeba je odnotować osobno, np. jako wynik `pcapanalyzer -T … -L`. Przy przekazywaniu raportu warto dołączyć dokumentację i tę informację.
