@@ -11,6 +11,9 @@ zapisany w plikach `.pcap`/`.pcapng` i dla każdego pliku generuje:
 Zależności: `libpcap`, `cairo` (PNG + PDF), `libm` i czcionka DejaVu — wszystkie są
 w standardowych repozytoriach Ubuntu.
 
+## Oświadczenie o wykorzystaniu narzędzi AI
+W trakcie realizacji projektu wykorzystano narzędzia sztucznej inteligencji Claude (Anthropic) oraz Codex (OpenAI) jako wsparcie przy pisaniu i poprawianiu kodu oraz tworzeniu dokumentacji. Wygenerowane fragmenty zostały przeanalizowane, zweryfikowane i zintegrowane przez autorów, którzy ponoszą pełną odpowiedzialność za ostateczny kształt i działanie projektu.
+
 ## Instalacja i kompilacja
 
 ```bash
